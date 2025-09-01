@@ -7,7 +7,7 @@
     <!-- Google Fonts Link For Icons -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <style>
-      /* CSS unchanged from your previous style */
+    /* CSS unchanged from your previous style */
       @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
       * { margin:0; padding:0; box-sizing:border-box; font-family:"Poppins", sans-serif; }
       :root {
@@ -85,143 +85,199 @@
 
     <script>
       // Elements
-      const chatInput = document.querySelector("#chat-input");
-      const sendButton = document.querySelector("#send-btn");
-      const chatContainer = document.querySelector(".chat-container");
-      const themeButton = document.querySelector("#theme-btn");
-      const deleteButton = document.querySelector("#delete-btn");
-      const initialInputHeight = chatInput.scrollHeight;
+const chatInput = document.querySelector("#chat-input");
+const sendButton = document.querySelector("#send-btn");
+const chatContainer = document.querySelector(".chat-container");
+const themeButton = document.querySelector("#theme-btn");
+const deleteButton = document.querySelector("#delete-btn");
+const initialInputHeight = chatInput.scrollHeight;
 
-      let userText = "";
+let userText = "";
 
-      // Embedded QA JSON
-      let qaData = {
-        "GPT-5o": [
-          { "question": "What is AI?", "answer": "AI simulates human intelligence in machines.", "keywords":["AI","intelligence","machines"] },
-          { "question": "What is machine learning?", "answer": "Machine learning allows systems to learn and improve.", "keywords":["machine learning","data","improve"] },
-          { "question": "What is deep learning?", "answer": "Deep learning uses neural networks to model complex patterns.", "keywords":["deep learning","neural networks","patterns"] }
-        ]
-      };
+// QA data (loaded from JSON)
+let qaData = {};
 
-      // LocalStorage & Theme
-      const loadDataFromLocalstorage = () => {
-        const theme = localStorage.getItem("themeColor");
-        document.body.classList.toggle("light-mode", theme === "light_mode");
+// Fetch QA JSON on page load
+async function loadQAData() {
+  try {
+    const response = await fetch("gpt-5o.json");
+    if (!response.ok) throw new Error("Failed to load gpt-5o.json");
+    qaData = await response.json();
+  } catch (error) {
+    console.error("Error loading QA data:", error);
+    qaData = { "GPT-5o": [] };
+  }
+}
 
-        const defaultText = `<div class="default-text"><h1>GPT-5o ChatBot</h1>
-          <p>Start a conversation.<br>Your chat history will appear here.</p></div>`;
-        chatContainer.innerHTML = localStorage.getItem("all-chats") || defaultText;
-        chatContainer.scrollTo(0, chatContainer.scrollHeight);
-      };
+// LocalStorage & Theme
+const loadDataFromLocalstorage = () => {
+  const theme = localStorage.getItem("themeColor");
+  document.body.classList.toggle("light-mode", theme === "light_mode");
 
-      // Chat creation
-      const createChatElement = (content, className) => {
-        const div = document.createElement("div");
-        div.classList.add("chat", className);
-        div.innerHTML = content;
-        return div;
-      };
+  const defaultText = `<div class="default-text"><h1>GPT-5o ChatBot</h1>
+    <p>Start a conversation.<br>Your chat history will appear here.</p></div>`;
+  chatContainer.innerHTML = localStorage.getItem("all-chats") || defaultText;
+  chatContainer.scrollTo(0, chatContainer.scrollHeight);
+};
 
-      // Markov chain generator
-      function buildMarkovChain(textArray) {
-        const markov = {};
-        textArray.forEach(sentence => {
-          const words = sentence.split(/\s+/);
-          for(let i=0;i<words.length-1;i++){
-            const word = words[i].toLowerCase();
-            const nextWord = words[i+1].toLowerCase();
-            if(!markov[word]) markov[word] = [];
-            markov[word].push(nextWord);
-          }
-        });
-        return markov;
-      }
+// Chat creation
+const createChatElement = (content, className) => {
+  const div = document.createElement("div");
+  div.classList.add("chat", className);
+  div.innerHTML = content;
+  return div;
+};
 
-      function generateMarkovResponse(chain, startWord=null, length=20){
-        const keys = Object.keys(chain);
-        let word = startWord || keys[Math.floor(Math.random()*keys.length)];
-        const result = [word];
-        for(let i=0;i<length;i++){
-          const nextWords = chain[word];
-          if(!nextWords || nextWords.length===0) break;
-          word = nextWords[Math.floor(Math.random()*nextWords.length)];
-          result.push(word);
-        }
-        return result.join(" ");
-      }
+// Markov chain generator
+function buildMarkovChain(textArray) {
+  const markov = {};
+  textArray.forEach(sentence => {
+    const words = sentence.split(/\s+/);
+    for (let i = 0; i < words.length - 1; i++) {
+      const word = words[i].toLowerCase();
+      const nextWord = words[i + 1].toLowerCase();
+      if (!markov[word]) markov[word] = [];
+      markov[word].push(nextWord);
+    }
+  });
+  return markov;
+}
 
-      // Generate response using Markov chain + conversation context
-      function getContextAwareResponse(userText){
-        const pastChats = localStorage.getItem("all-chats") || "";
-        const answers = qaData["GPT-5o"].map(a => a.answer);
-        const combinedText = answers.concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
-        const chain = buildMarkovChain(combinedText);
+function generateMarkovResponse(chain, startWord = null, length = 20) {
+  const keys = Object.keys(chain);
+  let word = startWord || keys[Math.floor(Math.random() * keys.length)];
+  const result = [word];
+  for (let i = 0; i < length; i++) {
+    const nextWords = chain[word];
+    if (!nextWords || nextWords.length === 0) break;
+    word = nextWords[Math.floor(Math.random() * nextWords.length)];
+    result.push(word);
+  }
+  return result.join(" ");
+}
 
-        // Start word based on matching QA
-        let startWord = null;
-        for(let item of qaData["GPT-5o"]){
-          if(userText.toLowerCase().includes(item.question.toLowerCase())){
-            startWord = item.answer.split(" ")[0].toLowerCase();
-            break;
-          }
-        }
-        return generateMarkovResponse(chain, startWord, 25);
-      }
+// Generate response using Markov chain + conversation context
+function getContextAwareResponse(userText) {
+  const pastChats = localStorage.getItem("all-chats") || "";
+  const qaItems = qaData["GPT-5o"] || [];
+  const answers = qaItems.map(a => a.answer);
+  const combinedText = answers.concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
+  const chain = buildMarkovChain(combinedText);
 
-      // Show bot typing
-      const showTypingAnimation = () => {
-        const html = `<div class="chat-content">
-          <div class="chat-details">
-            <img src="images/chatbot.jpg" alt="chatbot-img">
-            <div class="typing-animation">
-              <div class="typing-dot" style="--delay:0.2s"></div>
-              <div class="typing-dot" style="--delay:0.3s"></div>
-              <div class="typing-dot" style="--delay:0.4s"></div>
-            </div>
-          </div></div>`;
-        const incomingDiv = createChatElement(html, "incoming");
-        chatContainer.appendChild(incomingDiv);
-        chatContainer.scrollTo(0, chatContainer.scrollHeight);
-        setTimeout(() => {
-          const p = document.createElement("p");
-          p.textContent = getContextAwareResponse(userText);
-          incomingDiv.querySelector(".typing-animation").remove();
-          incomingDiv.querySelector(".chat-details").appendChild(p);
-          localStorage.setItem("all-chats", chatContainer.innerHTML);
-          chatContainer.scrollTo(0, chatContainer.scrollHeight);
-        }, 800);
-      };
+  let startWord = null;
+  for (let item of qaItems) {
+    if (userText.toLowerCase().includes(item.question.toLowerCase())) {
+      startWord = item.answer.split(" ")[0].toLowerCase();
+      break;
+    }
+  }
+  return generateMarkovResponse(chain, startWord, 25);
+}
 
-      // Send chat
-      const handleOutgoingChat = () => {
-        userText = chatInput.value.trim();
-        if(!userText) return;
-        chatInput.value = "";
-        chatInput.style.height = `${initialInputHeight}px`;
+// Display text gradually, 2-4 words per chunk, delay configurable via localStorage
+function displayTextGradually(element, text) {
+  const defaultDelay = 100; // default 0.1 seconds
+  const delay = parseInt(localStorage.getItem("typingSpeed")) || defaultDelay;
 
-        const html = `<div class="chat-content">
-          <div class="chat-details">
-            <img src="images/user.jpg" alt="user-img">
-            <p>${userText}</p>
-          </div></div>`;
-        const outgoingDiv = createChatElement(html, "outgoing");
-        chatContainer.querySelector(".default-text")?.remove();
-        chatContainer.appendChild(outgoingDiv);
-        chatContainer.scrollTo(0, chatContainer.scrollHeight);
-        setTimeout(showTypingAnimation, 300);
-      };
+  const words = text.split(" ");
+  let i = 0;
 
-      // Event listeners
-      sendButton.addEventListener("click", handleOutgoingChat);
-      chatInput.addEventListener("keydown", e => { if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); handleOutgoingChat(); } });
-      chatInput.addEventListener("input", () => { chatInput.style.height = `${initialInputHeight}px`; chatInput.style.height = `${chatInput.scrollHeight}px`; });
-      themeButton.addEventListener("click", () => {
-        document.body.classList.toggle("light-mode");
-        localStorage.setItem("themeColor", document.body.classList.contains("light-mode")?"light_mode":"dark_mode");
-      });
-      deleteButton.addEventListener("click", () => { if(confirm("Delete all chats?")){ localStorage.removeItem("all-chats"); loadDataFromLocalstorage(); }});
+  function addWords() {
+    if (i >= words.length) return;
+    const chunkSize = Math.floor(Math.random() * 3) + 2; // 2-4 words
+    const chunk = words.slice(i, i + chunkSize).join(" ");
+    element.textContent += (element.textContent ? " " : "") + chunk;
+    i += chunkSize;
+    setTimeout(addWords, delay);
+  }
 
-      loadDataFromLocalstorage();
+  addWords();
+}
+
+// Show bot typing with gradual text
+const showTypingAnimation = () => {
+  const html = `<div class="chat-content">
+    <div class="chat-details">
+      <img src="images/chatbot.jpg" alt="chatbot-img">
+      <div class="typing-animation">
+        <div class="typing-dot" style="--delay:0.2s"></div>
+        <div class="typing-dot" style="--delay:0.3s"></div>
+        <div class="typing-dot" style="--delay:0.4s"></div>
+      </div>
+    </div></div>`;
+
+  const incomingDiv = createChatElement(html, "incoming");
+  chatContainer.appendChild(incomingDiv);
+  chatContainer.scrollTo(0, chatContainer.scrollHeight);
+
+  setTimeout(() => {
+    const p = document.createElement("p");
+    incomingDiv.querySelector(".typing-animation").remove();
+    incomingDiv.querySelector(".chat-details").appendChild(p);
+
+    const responseText = getContextAwareResponse(userText);
+    displayTextGradually(p, responseText);
+
+    // Save chat after all words displayed
+    const wordsCount = responseText.split(" ").length;
+    const totalDelay = Math.ceil(wordsCount / 2) * (parseInt(localStorage.getItem("typingSpeed")) || 100) * 1.5;
+    setTimeout(() => {
+      localStorage.setItem("all-chats", chatContainer.innerHTML);
+      chatContainer.scrollTo(0, chatContainer.scrollHeight);
+    }, totalDelay);
+  }, 800);
+};
+
+// Send chat
+const handleOutgoingChat = () => {
+  userText = chatInput.value.trim();
+  if (!userText) return;
+  chatInput.value = "";
+  chatInput.style.height = `${initialInputHeight}px`;
+
+  const html = `<div class="chat-content">
+    <div class="chat-details">
+      <img src="images/user.jpg" alt="user-img">
+      <p>${userText}</p>
+    </div></div>`;
+  const outgoingDiv = createChatElement(html, "outgoing");
+  chatContainer.querySelector(".default-text")?.remove();
+  chatContainer.appendChild(outgoingDiv);
+  chatContainer.scrollTo(0, chatContainer.scrollHeight);
+  setTimeout(showTypingAnimation, 300);
+};
+
+// Event listeners
+sendButton.addEventListener("click", handleOutgoingChat);
+chatInput.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    handleOutgoingChat();
+  }
+});
+chatInput.addEventListener("input", () => {
+  chatInput.style.height = `${initialInputHeight}px`;
+  chatInput.style.height = `${chatInput.scrollHeight}px`;
+});
+themeButton.addEventListener("click", () => {
+  document.body.classList.toggle("light-mode");
+  localStorage.setItem(
+    "themeColor",
+    document.body.classList.contains("light-mode") ? "light_mode" : "dark_mode"
+  );
+});
+deleteButton.addEventListener("click", () => {
+  if (confirm("Delete all chats?")) {
+    localStorage.removeItem("all-chats");
+    loadDataFromLocalstorage();
+  }
+});
+
+// Initialize
+(async function init() {
+  await loadQAData();
+  loadDataFromLocalstorage();
+})();
     </script>
   </body>
 </html>
