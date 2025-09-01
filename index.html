@@ -84,7 +84,7 @@
     </div>
 
     <script>
-      // Elements
+     // Elements
 const chatInput = document.querySelector("#chat-input");
 const sendButton = document.querySelector("#send-btn");
 const chatContainer = document.querySelector(".chat-container");
@@ -194,11 +194,11 @@ function displayTextGradually(element, text) {
   addWords();
 }
 
-// Show bot typing with gradual text
+// Show bot typing with gradual text and GPT-5o profile image
 const showTypingAnimation = () => {
   const html = `<div class="chat-content">
     <div class="chat-details">
-      <img src="images/chatbot.jpg" alt="chatbot-img">
+      <img src="profile/gpt-5o.jpg" alt="chatbot-img">
       <div class="typing-animation">
         <div class="typing-dot" style="--delay:0.2s"></div>
         <div class="typing-dot" style="--delay:0.3s"></div>
@@ -218,7 +218,6 @@ const showTypingAnimation = () => {
     const responseText = getContextAwareResponse(userText);
     displayTextGradually(p, responseText);
 
-    // Save chat after all words displayed
     const wordsCount = responseText.split(" ").length;
     const totalDelay = Math.ceil(wordsCount / 2) * (parseInt(localStorage.getItem("typingSpeed")) || 100) * 1.5;
     setTimeout(() => {
@@ -228,7 +227,7 @@ const showTypingAnimation = () => {
   }, 800);
 };
 
-// Send chat
+// Send chat with user profile image
 const handleOutgoingChat = () => {
   userText = chatInput.value.trim();
   if (!userText) return;
@@ -237,7 +236,7 @@ const handleOutgoingChat = () => {
 
   const html = `<div class="chat-content">
     <div class="chat-details">
-      <img src="images/user.jpg" alt="user-img">
+      <img src="profile/user.jpg" alt="user-img">
       <p>${userText}</p>
     </div></div>`;
   const outgoingDiv = createChatElement(html, "outgoing");
@@ -278,6 +277,7 @@ deleteButton.addEventListener("click", () => {
   await loadQAData();
   loadDataFromLocalstorage();
 })();
+
     </script>
   </body>
 </html>
