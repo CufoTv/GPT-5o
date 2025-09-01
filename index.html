@@ -93,30 +93,10 @@ const deleteButton = document.querySelector("#delete-btn");
 const initialInputHeight = chatInput.scrollHeight;
 
 let userText = "";
-let isBotTyping = false; // new flag to block sending messages while bot is typing
+let isBotTyping = false; // Lock flag
 
 // QA data (loaded from JSON)
 let qaData = {};
-
-// Create typing speed slider below chat input
-const sliderContainer = document.createElement("div");
-sliderContainer.style.display = "flex";
-sliderContainer.style.alignItems = "center";
-sliderContainer.style.marginTop = "5px";
-sliderContainer.innerHTML = `
-  <label style="margin-right:10px;">Typing Speed:</label>
-  <input type="range" id="typing-speed-slider" min="50" max="500" value="${localStorage.getItem("typingSpeed") || 100}" />
-  <span id="typing-speed-value">${localStorage.getItem("typingSpeed") || 100} ms</span>
-`;
-document.querySelector(".typing-container .typing-content").appendChild(sliderContainer);
-
-const typingSlider = document.getElementById("typing-speed-slider");
-const typingValue = document.getElementById("typing-speed-value");
-
-typingSlider.addEventListener("input", () => {
-  localStorage.setItem("typingSpeed", typingSlider.value);
-  typingValue.textContent = `${typingSlider.value} ms`;
-});
 
 // Fetch QA JSON on page load
 async function loadQAData() {
@@ -195,18 +175,15 @@ function getContextAwareResponse(userText) {
   return generateMarkovResponse(chain, startWord, 25);
 }
 
-// Display text gradually, 2-4 words per chunk, delay from localStorage
+// Display text gradually, 2-4 words per chunk, delay default 0.1s
 function displayTextGradually(element, text, callback) {
-  isBotTyping = true;
-  const delay = parseInt(localStorage.getItem("typingSpeed")) || 100;
-
+  const delay = 100; // fixed default
   const words = text.split(" ");
   let i = 0;
 
   function addWords() {
     if (i >= words.length) {
-      isBotTyping = false;
-      if (callback) callback();
+      if (callback) callback(); // Unlock after finished
       return;
     }
     const chunkSize = Math.floor(Math.random() * 3) + 2; // 2-4 words
@@ -219,8 +196,9 @@ function displayTextGradually(element, text, callback) {
   addWords();
 }
 
-// Show bot typing with gradual text and GPT-5o profile image
+// Show bot typing with gradual text
 const showTypingAnimation = () => {
+  isBotTyping = true; // lock input
   const html = `<div class="chat-content">
     <div class="chat-details">
       <img src="profile/gpt-5o.jpg" alt="chatbot-img">
@@ -242,18 +220,20 @@ const showTypingAnimation = () => {
 
     const responseText = getContextAwareResponse(userText);
     displayTextGradually(p, responseText, () => {
+      // Unlock after bot finishes
+      isBotTyping = false;
       localStorage.setItem("all-chats", chatContainer.innerHTML);
       chatContainer.scrollTo(0, chatContainer.scrollHeight);
     });
-
   }, 800);
 };
 
-// Send chat with user profile image, block if bot typing
+// Send chat with user profile image
 const handleOutgoingChat = () => {
-  if (isBotTyping) return; // prevent sending while bot is typing
+  if (isBotTyping) return; // Prevent sending while bot is typing
   userText = chatInput.value.trim();
   if (!userText) return;
+
   chatInput.value = "";
   chatInput.style.height = `${initialInputHeight}px`;
 
