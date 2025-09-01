@@ -129,7 +129,16 @@ const createChatElement = (content, className) => {
   return div;
 };
 
-// Markov chain generator
+// Pattern recognition (simplified example: detect mood or keywords)
+function patternRecognition(text) {
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes("happy") || lowerText.includes("great")) return "positive";
+  if (lowerText.includes("sad") || lowerText.includes("bad")) return "negative";
+  if (lowerText.includes("help") || lowerText.includes("how")) return "informative";
+  return "neutral";
+}
+
+// Build Markov Chain
 function buildMarkovChain(textArray) {
   const markov = {};
   textArray.forEach(sentence => {
@@ -157,36 +166,62 @@ function generateMarkovResponse(chain, startWord = null, length = 20) {
   return result.join(" ");
 }
 
-// Generate response using Markov chain + conversation context
-function getContextAwareResponse(userText) {
+// Generate response (8-step process)
+function generateAdvancedResponse(userQuestion) {
   const pastChats = localStorage.getItem("all-chats") || "";
   const qaItems = qaData["GPT-5o"] || [];
-  const answers = qaItems.map(a => a.answer);
-  const combinedText = answers.concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
-  const chain = buildMarkovChain(combinedText);
+  let mainAnswer = "";
+  let alternativeAnswers = [];
+  let finalAnswer = "";
 
-  let startWord = null;
+  // Step 1: Collect user question
+  const question = userQuestion.trim();
+
+  // Step 2 & 3: Check if question exists and collect main answer
   for (let item of qaItems) {
-    if (userText.toLowerCase().includes(item.question.toLowerCase())) {
-      startWord = item.answer.split(" ")[0].toLowerCase();
+    if (question.toLowerCase().includes(item.question.toLowerCase())) {
+      mainAnswer = item.answer;
       break;
     }
   }
-  return generateMarkovResponse(chain, startWord, 25);
+
+  // Step 4: Check for alternative answers for same question
+  alternativeAnswers = qaItems
+    .filter(item => item.question.toLowerCase() === question.toLowerCase() && item.answer !== mainAnswer)
+    .map(item => item.answer);
+
+  // Step 5: Pattern recognition to detect mood/context
+  const mood = patternRecognition(question);
+
+  // Step 6: Create new answer based on pattern recognition
+  let patternAnswer = mainAnswer;
+  if (mood === "positive") patternAnswer += " 😊";
+  else if (mood === "negative") patternAnswer += " 😔";
+  else if (mood === "informative") patternAnswer += " Here's some info:";
+
+  // Step 7: Markov Chain to combine previous answers
+  const combinedText = [patternAnswer].concat(alternativeAnswers).concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
+  const chain = buildMarkovChain(combinedText);
+  const markovAnswer = generateMarkovResponse(chain, patternAnswer.split(" ")[0].toLowerCase(), 25);
+
+  // Step 8: Combine all to final answer
+  finalAnswer = markovAnswer;
+
+  return finalAnswer;
 }
 
-// Display text gradually, 2-4 words per chunk, delay default 0.1s
+// Display text gradually
 function displayTextGradually(element, text, callback) {
-  const delay = 100; // fixed default
+  const delay = 100; // fixed default 0.1s
   const words = text.split(" ");
   let i = 0;
 
   function addWords() {
     if (i >= words.length) {
-      if (callback) callback(); // Unlock after finished
+      if (callback) callback();
       return;
     }
-    const chunkSize = Math.floor(Math.random() * 3) + 2; // 2-4 words
+    const chunkSize = Math.floor(Math.random() * 3) + 2;
     const chunk = words.slice(i, i + chunkSize).join(" ");
     element.textContent += (element.textContent ? " " : "") + chunk;
     i += chunkSize;
@@ -196,7 +231,7 @@ function displayTextGradually(element, text, callback) {
   addWords();
 }
 
-// Show bot typing with gradual text
+// Show bot typing
 const showTypingAnimation = () => {
   isBotTyping = true; // lock input
   const html = `<div class="chat-content">
@@ -218,9 +253,8 @@ const showTypingAnimation = () => {
     incomingDiv.querySelector(".typing-animation").remove();
     incomingDiv.querySelector(".chat-details").appendChild(p);
 
-    const responseText = getContextAwareResponse(userText);
+    const responseText = generateAdvancedResponse(userText);
     displayTextGradually(p, responseText, () => {
-      // Unlock after bot finishes
       isBotTyping = false;
       localStorage.setItem("all-chats", chatContainer.innerHTML);
       chatContainer.scrollTo(0, chatContainer.scrollHeight);
@@ -228,9 +262,9 @@ const showTypingAnimation = () => {
   }, 800);
 };
 
-// Send chat with user profile image
+// Send chat
 const handleOutgoingChat = () => {
-  if (isBotTyping) return; // Prevent sending while bot is typing
+  if (isBotTyping) return;
   userText = chatInput.value.trim();
   if (!userText) return;
 
