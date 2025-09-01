@@ -81,10 +81,7 @@
           <span id="delete-btn" class="material-symbols-rounded">delete</span>
         </div>
       </div>
-    </div>
-
-    <script>
-      // Elements
+    // Elements
 const chatInput = document.querySelector("#chat-input");
 const sendButton = document.querySelector("#send-btn");
 const chatContainer = document.querySelector(".chat-container");
@@ -93,24 +90,24 @@ const deleteButton = document.querySelector("#delete-btn");
 const initialInputHeight = chatInput.scrollHeight;
 
 let userText = "";
-let isBotTyping = false; // Lock flag
+let isBotTyping = false; // Lock input while bot is typing
 
-// QA data (loaded from JSON)
+// QA data
 let qaData = {};
 
-// Fetch QA JSON on page load
+// Load QA JSON
 async function loadQAData() {
   try {
-    const response = await fetch("gpt-5o.json");
-    if (!response.ok) throw new Error("Failed to load gpt-5o.json");
-    qaData = await response.json();
-  } catch (error) {
-    console.error("Error loading QA data:", error);
+    const res = await fetch("gpt-5o.json");
+    if (!res.ok) throw new Error("Failed to load gpt-5o.json");
+    qaData = await res.json();
+  } catch (err) {
+    console.error(err);
     qaData = { "GPT-5o": [] };
   }
 }
 
-// LocalStorage & Theme
+// LocalStorage & theme
 const loadDataFromLocalstorage = () => {
   const theme = localStorage.getItem("themeColor");
   document.body.classList.toggle("light-mode", theme === "light_mode");
@@ -121,7 +118,7 @@ const loadDataFromLocalstorage = () => {
   chatContainer.scrollTo(0, chatContainer.scrollHeight);
 };
 
-// Chat creation
+// Chat element creation
 const createChatElement = (content, className) => {
   const div = document.createElement("div");
   div.classList.add("chat", className);
@@ -129,7 +126,7 @@ const createChatElement = (content, className) => {
   return div;
 };
 
-// Build Markov Chain
+// Markov chain generator
 function buildMarkovChain(textArray) {
   const markov = {};
   textArray.forEach(sentence => {
@@ -157,70 +154,90 @@ function generateMarkovResponse(chain, startWord = null, length = 20) {
   return result.join(" ");
 }
 
-// Advanced context-aware response
-function generateContextAwareResponse(userQuestion) {
-  const pastChats = localStorage.getItem("all-chats") || "";
-  const qaItems = qaData["GPT-5o"] || [];
+// Compute simple similarity (for semantic fallback)
+function similarity(a, b) {
+  const aWords = a.toLowerCase().split(" ");
+  const bWords = b.toLowerCase().split(" ");
+  const intersection = aWords.filter(w => bWords.includes(w));
+  return intersection.length / Math.max(aWords.length, bWords.length);
+}
 
+// Weighted random selection
+function weightedRandomSelect(items, question) {
+  const weights = items.map(item => {
+    const overlap = question.split(" ").filter(w => item.question.toLowerCase().includes(w)).length;
+    return overlap + 1; // minimum weight 1
+  });
+  const sum = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * sum;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return items[i];
+  }
+  return items[0];
+}
+
+// Step-based context-aware answer
+function generateAnswer(userQuestion) {
   const question = userQuestion.trim().toLowerCase();
+  const qaItems = qaData["GPT-5o"] || [];
+  const pastChats = localStorage.getItem("all-chats") || "";
 
-  // Step 2-3: Check if exact question exists
-  let matchingItems = qaItems.filter(item => item.question.toLowerCase() === question);
   let answer = "";
+  let matches = [];
 
-  if (matchingItems.length > 0) {
-    // Step 5: Multiple answers, pick random
-    const selected = matchingItems[Math.floor(Math.random() * matchingItems.length)];
+  // Step 2: Exact match
+  matches = qaItems.filter(item => item.question.toLowerCase() === question);
+  if (matches.length > 0) {
+    // Weighted random if multiple exact matches
+    const selected = weightedRandomSelect(matches, question);
     answer = selected.answer;
   } else {
-    // Step 4: fallback by topic matching (contains keywords)
-    matchingItems = qaItems.filter(item => question.split(" ").some(w => item.question.toLowerCase().includes(w)));
-    if (matchingItems.length > 0) {
-      const selected = matchingItems[Math.floor(Math.random() * matchingItems.length)];
+    // Step 3: Topic match fallback using semantic similarity
+    const similarityScores = qaItems.map(item => ({ item, score: similarity(question, item.question) }));
+    const maxScore = Math.max(...similarityScores.map(s => s.score));
+    if (maxScore > 0) {
+      const topMatches = similarityScores.filter(s => s.score === maxScore).map(s => s.item);
+      const selected = weightedRandomSelect(topMatches, question);
       answer = selected.answer;
     } else {
-      // No matching topic: just answer with default reply
+      // Step 7: No match → log for future improvement
+      const log = JSON.parse(localStorage.getItem("unmatchedQuestions") || "[]");
+      log.push(userQuestion);
+      localStorage.setItem("unmatchedQuestions", JSON.stringify(log));
       answer = "I am not sure about that, but I will try my best.";
     }
   }
 
-  // Step 6: Collect alternative answers for Markov chain
+  // Step 4 & 5: Collect alternative answers for Markov enhancement
   const alternativeAnswers = qaItems
     .filter(item => item.question.toLowerCase() === question && item.answer !== answer)
     .map(item => item.answer);
 
-  // Step 7: If no exact duplicates, use related items as fallback for Markov
-  const fallbackAnswers = alternativeAnswers.length > 0 ? alternativeAnswers : matchingItems.map(item => item.answer);
-
-  // Step 8: Build Markov chain to generate enhanced answer
-  const combinedText = [answer].concat(fallbackAnswers).concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
+  const fallbackAnswers = alternativeAnswers.length > 0 ? alternativeAnswers : [answer];
+  const combinedText = fallbackAnswers.concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
   const chain = buildMarkovChain(combinedText);
-  const markovAnswer = generateMarkovResponse(chain, answer.split(" ")[0].toLowerCase(), 25);
 
-  // Decide whether to use enhanced answer or simple
-  if (fallbackAnswers.length === 0 && matchingItems.length === 0) {
-    return answer; // keep simple if no context
-  } else {
-    return markovAnswer;
-  }
+  // Step 6: Adaptive response length based on user question
+  const length = Math.min(Math.max(userQuestion.split(" ").length * 2, 20), 60);
+  const markovAnswer = generateMarkovResponse(chain, answer.split(" ")[0].toLowerCase(), length);
+
+  // If fallback answer exists, return enhanced answer, else simple answer
+  return fallbackAnswers.length > 1 ? markovAnswer : answer;
 }
 
-// Display text gradually
+// Display gradually
 function displayTextGradually(element, text, callback) {
-  const delay = 100; // 0.1s
   const words = text.split(" ");
   let i = 0;
 
   function addWords() {
-    if (i >= words.length) {
-      if (callback) callback();
-      return;
-    }
-    const chunkSize = Math.floor(Math.random() * 3) + 2;
+    if (i >= words.length) return callback && callback();
+    const chunkSize = Math.floor(Math.random() * 3) + 2; // 2-4 words per batch
     const chunk = words.slice(i, i + chunkSize).join(" ");
     element.textContent += (element.textContent ? " " : "") + chunk;
     i += chunkSize;
-    setTimeout(addWords, delay);
+    setTimeout(addWords, 100);
   }
 
   addWords();
@@ -248,7 +265,7 @@ const showTypingAnimation = () => {
     incomingDiv.querySelector(".typing-animation").remove();
     incomingDiv.querySelector(".chat-details").appendChild(p);
 
-    const responseText = generateContextAwareResponse(userText);
+    const responseText = generateAnswer(userText);
     displayTextGradually(p, responseText, () => {
       isBotTyping = false;
       localStorage.setItem("all-chats", chatContainer.innerHTML);
