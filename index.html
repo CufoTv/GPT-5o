@@ -84,7 +84,7 @@
     </div>
 
     <script>
-    // Elements
+      // Elements
 const chatInput = document.querySelector("#chat-input");
 const sendButton = document.querySelector("#send-btn");
 const chatContainer = document.querySelector(".chat-container");
@@ -129,15 +129,6 @@ const createChatElement = (content, className) => {
   return div;
 };
 
-// Pattern recognition (simplified example: detect mood or keywords)
-function patternRecognition(text) {
-  const lowerText = text.toLowerCase();
-  if (lowerText.includes("happy") || lowerText.includes("great")) return "positive";
-  if (lowerText.includes("sad") || lowerText.includes("bad")) return "negative";
-  if (lowerText.includes("help") || lowerText.includes("how")) return "informative";
-  return "neutral";
-}
-
 // Build Markov Chain
 function buildMarkovChain(textArray) {
   const markov = {};
@@ -166,53 +157,57 @@ function generateMarkovResponse(chain, startWord = null, length = 20) {
   return result.join(" ");
 }
 
-// Generate response (8-step process)
-function generateAdvancedResponse(userQuestion) {
+// Advanced context-aware response
+function generateContextAwareResponse(userQuestion) {
   const pastChats = localStorage.getItem("all-chats") || "";
   const qaItems = qaData["GPT-5o"] || [];
-  let mainAnswer = "";
-  let alternativeAnswers = [];
-  let finalAnswer = "";
 
-  // Step 1: Collect user question
-  const question = userQuestion.trim();
+  const question = userQuestion.trim().toLowerCase();
 
-  // Step 2 & 3: Check if question exists and collect main answer
-  for (let item of qaItems) {
-    if (question.toLowerCase().includes(item.question.toLowerCase())) {
-      mainAnswer = item.answer;
-      break;
+  // Step 2-3: Check if exact question exists
+  let matchingItems = qaItems.filter(item => item.question.toLowerCase() === question);
+  let answer = "";
+
+  if (matchingItems.length > 0) {
+    // Step 5: Multiple answers, pick random
+    const selected = matchingItems[Math.floor(Math.random() * matchingItems.length)];
+    answer = selected.answer;
+  } else {
+    // Step 4: fallback by topic matching (contains keywords)
+    matchingItems = qaItems.filter(item => question.split(" ").some(w => item.question.toLowerCase().includes(w)));
+    if (matchingItems.length > 0) {
+      const selected = matchingItems[Math.floor(Math.random() * matchingItems.length)];
+      answer = selected.answer;
+    } else {
+      // No matching topic: just answer with default reply
+      answer = "I am not sure about that, but I will try my best.";
     }
   }
 
-  // Step 4: Check for alternative answers for same question
-  alternativeAnswers = qaItems
-    .filter(item => item.question.toLowerCase() === question.toLowerCase() && item.answer !== mainAnswer)
+  // Step 6: Collect alternative answers for Markov chain
+  const alternativeAnswers = qaItems
+    .filter(item => item.question.toLowerCase() === question && item.answer !== answer)
     .map(item => item.answer);
 
-  // Step 5: Pattern recognition to detect mood/context
-  const mood = patternRecognition(question);
+  // Step 7: If no exact duplicates, use related items as fallback for Markov
+  const fallbackAnswers = alternativeAnswers.length > 0 ? alternativeAnswers : matchingItems.map(item => item.answer);
 
-  // Step 6: Create new answer based on pattern recognition
-  let patternAnswer = mainAnswer;
-  if (mood === "positive") patternAnswer += " 😊";
-  else if (mood === "negative") patternAnswer += " 😔";
-  else if (mood === "informative") patternAnswer += " Here's some info:";
-
-  // Step 7: Markov Chain to combine previous answers
-  const combinedText = [patternAnswer].concat(alternativeAnswers).concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
+  // Step 8: Build Markov chain to generate enhanced answer
+  const combinedText = [answer].concat(fallbackAnswers).concat(pastChats.split(/<p>|<\/p>/).filter(Boolean));
   const chain = buildMarkovChain(combinedText);
-  const markovAnswer = generateMarkovResponse(chain, patternAnswer.split(" ")[0].toLowerCase(), 25);
+  const markovAnswer = generateMarkovResponse(chain, answer.split(" ")[0].toLowerCase(), 25);
 
-  // Step 8: Combine all to final answer
-  finalAnswer = markovAnswer;
-
-  return finalAnswer;
+  // Decide whether to use enhanced answer or simple
+  if (fallbackAnswers.length === 0 && matchingItems.length === 0) {
+    return answer; // keep simple if no context
+  } else {
+    return markovAnswer;
+  }
 }
 
 // Display text gradually
 function displayTextGradually(element, text, callback) {
-  const delay = 100; // fixed default 0.1s
+  const delay = 100; // 0.1s
   const words = text.split(" ");
   let i = 0;
 
@@ -233,7 +228,7 @@ function displayTextGradually(element, text, callback) {
 
 // Show bot typing
 const showTypingAnimation = () => {
-  isBotTyping = true; // lock input
+  isBotTyping = true;
   const html = `<div class="chat-content">
     <div class="chat-details">
       <img src="profile/gpt-5o.jpg" alt="chatbot-img">
@@ -253,7 +248,7 @@ const showTypingAnimation = () => {
     incomingDiv.querySelector(".typing-animation").remove();
     incomingDiv.querySelector(".chat-details").appendChild(p);
 
-    const responseText = generateAdvancedResponse(userText);
+    const responseText = generateContextAwareResponse(userText);
     displayTextGradually(p, responseText, () => {
       isBotTyping = false;
       localStorage.setItem("all-chats", chatContainer.innerHTML);
